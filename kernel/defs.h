@@ -105,6 +105,8 @@ void            wakeup(void*);
 void            yield(void);
 int             either_copyout(int user_dst, uint64 dst, void *src, uint64 len);
 int             either_copyin(void *dst, int user_src, uint64 src, uint64 len);
+int             clone(void(*fcn)(void*, void*), void * arg1, void * arg2, void* stack);
+int             join(void ** stack);
 void            procdump(void);
 
 // swtch.S

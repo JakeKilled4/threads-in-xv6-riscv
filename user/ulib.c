@@ -1,5 +1,6 @@
 #include "kernel/types.h"
 #include "kernel/stat.h"
+#include "kernel/riscv.h"
 #include "kernel/fcntl.h"
 #include "user/user.h"
 
@@ -145,3 +146,33 @@ memcpy(void *dst, const void *src, uint n)
 {
   return memmove(dst, src, n);
 }
+
+int thread_create(void (*fn)(void *, void *), void* arg1, void* arg2)
+{
+  void* stack;
+  stack = malloc(PGSIZE);
+
+  return clone(fn, arg1, arg2, stack);
+}
+
+int thread_join()
+{
+  void * stackPtr;
+  int x = join(&stackPtr);
+  return x;
+}
+
+int lock_init(lock_t *lk)
+{
+  lk->flag = 0;
+  return 0;
+}
+
+void lock_acquire(lock_t *lk){
+  while(__sync_lock_test_and_set(&lk->flag, 1) != 0);
+}
+
+void lock_release(lock_t *lk){
+  __sync_lock_test_and_set(&lk->flag, 0);
+}
+

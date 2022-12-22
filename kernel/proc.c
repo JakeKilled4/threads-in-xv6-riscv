@@ -681,3 +681,37 @@ procdump(void)
     printf("\n");
   }
 }
+
+int clone(void(*fcn)(void*, void *), void * arg1, void * arg2, void* stack){
+  /*  
+  struct proc *np;
+  struct proc * p = myproc();
+
+  for(np = proc; np < &proc[NPROC]; np++) {
+    acquire(&np->lock);
+    if(np->state == UNUSED) {
+      goto found;
+    } else {
+      release(&np->lock);
+    }
+  }
+  return -1;
+
+  found:
+    p->pid = allocpid();
+    p->state = USED;
+
+    // Set up new context to start executing at forkret,
+    // which returns to user space.
+    memset(&np->context, 0, sizeof(np->context));
+    p->context.ra = (uint64)forkret;
+    p->context.sp = p->kstack + PGSIZE;
+    */
+  return 0;
+ 
+}
+
+int join(void ** stack){
+
+  return 0;
+}
