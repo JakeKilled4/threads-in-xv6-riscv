@@ -169,6 +169,7 @@ freeproc(struct proc *p)
   p->killed = 0;
   p->xstate = 0;
   p->state = UNUSED;
+  p->thread_pagetable = 0;
 }
 
 // Create a user page table for a given process, with no user memory,
@@ -250,6 +251,7 @@ userinit(void)
   p->cwd = namei("/");
 
   p->state = RUNNABLE;
+  p->thread_pagetable = 0;
 
   release(&p->lock);
 }
@@ -296,6 +298,9 @@ fork(void)
   }
   np->sz = p->sz;
 
+  // Thread pagetable is 0
+  np->thread_pagetable = 0;
+
   // copy saved user registers.
   *(np->trapframe) = *(p->trapframe);
 
@@ -323,6 +328,71 @@ fork(void)
   release(&np->lock);
 
   return pid;
+}
+
+int clone(void(*fcn)(void*, void *), void * arg1, void * arg2, void* stack){
+  
+
+  struct proc *np;
+  struct proc * p = myproc();
+
+  if((np = allocproc()) == 0)
+    return -1;
+
+
+  // We dont need this page
+  uvmunmap(np->pagetable, TRAMPOLINE, 1, 0);
+ 
+  // if: The original procees is crating a thread
+  // else: Some thread is creating a new thread
+  if(p->thread_pagetable == 0) 
+    np->thread_pagetable = p->pagetable;
+  else
+    np->thread_pagetable = p->thread_pagetable;
+
+  syncronize_pagetable_threads(np->thread_pagetable, np->pagetable);  
+  
+  np->sz = p->sz;                     // Same heap
+  *(np->trapframe) = *(p->trapframe); // copy saved user registers
+ 
+  // Save address of stack
+  np->threadstack = (uint64)stack;
+  
+  // Put address of new stack in the stack pointer
+  np->trapframe->sp = (uint64)(stack + PGSIZE);
+   
+  // Set instruction pointer to given function
+  np->trapframe->epc = (uint64)fcn;
+ 
+  // Cause clone to return 0 in the child.
+  np->trapframe->a0 = 0;
+
+  // Pass arguments
+  np->trapframe->a0 = (uint64)arg1;
+  np->trapframe->a1 = (uint64)arg2;
+ 
+
+  // Same as fork
+  // increment reference counts on open file descriptors.
+  int i;
+  for(i = 0; i < NOFILE; i++)
+    if(p->ofile[i])
+      np->ofile[i] = filedup(p->ofile[i]);
+  np->cwd = idup(p->cwd);
+
+  safestrcpy(np->name, p->name, sizeof(p->name));
+
+  release(&np->lock);
+
+  acquire(&wait_lock);
+  np->parent = p;                 // Set father
+  release(&wait_lock);
+
+  acquire(&np->lock);
+  np->state = RUNNABLE;
+  release(&np->lock);
+ 
+  return np->pid; 
 }
 
 // Pass p's abandoned children to init.
@@ -460,6 +530,7 @@ scheduler(void)
         // before jumping back to us.
         p->state = RUNNING;
         c->proc = p;
+        syncronize_pagetable_threads(p->thread_pagetable, p->pagetable);  
         swtch(&c->context, &p->context);
 
         // Process is done running for now.
@@ -682,36 +753,76 @@ procdump(void)
   }
 }
 
-int clone(void(*fcn)(void*, void *), void * arg1, void * arg2, void* stack){
-  /*  
-  struct proc *np;
-  struct proc * p = myproc();
 
-  for(np = proc; np < &proc[NPROC]; np++) {
-    acquire(&np->lock);
-    if(np->state == UNUSED) {
-      goto found;
-    } else {
-      release(&np->lock);
+int
+join(uint64 stack)
+{
+  struct proc *pp;
+  int havekids, pid;
+  struct proc *p = myproc();
+
+  acquire(&wait_lock);
+
+  for(;;){
+    // Scan through table looking for exited children.
+    havekids = 0;
+    for(pp = proc; pp < &proc[NPROC]; pp++){
+      if(pp->parent != p) 
+        continue;
+      if(p->thread_pagetable == 0 && p->pagetable != pp->thread_pagetable)
+        continue;
+      if(p->thread_pagetable != 0 && p->thread_pagetable != pp->thread_pagetable)
+        continue;
+
+      // make sure the child isn't still in exit() or swtch().
+      acquire(&pp->lock);
+
+      havekids = 1;
+      if(pp->state == ZOMBIE){
+
+        // Found one.
+        pid = pp->pid;
+        
+        if(pp->trapframe) 
+          kfree((void*)pp->trapframe);
+        pp->trapframe = 0;
+
+        if(pp->pagetable)
+          free_thread_pages(pp->pagetable);  
+
+        pp->pagetable = 0;
+        pp->sz = 0;
+        pp->pid = 0;
+        pp->parent = 0;
+        pp->name[0] = 0;
+        pp->chan = 0;
+        pp->killed = 0;
+        pp->xstate = 0;
+        pp->state = UNUSED;
+        pp->thread_pagetable = 0;
+
+        if(stack != 0 && copyout(p->pagetable, stack, (char *)&pp->threadstack,
+              sizeof(pp->threadstack)) < 0) {
+          release(&pp->lock);
+          release(&wait_lock);
+          return -1;
+        }
+
+        pp->threadstack = 0;
+
+        release(&pp->lock);
+        release(&wait_lock);
+        return pid;
+      }
+      release(&pp->lock);
     }
+
+    // No point waiting if we don't have any children.
+    if(!havekids || killed(p)){
+      release(&wait_lock);
+      return -1;
+    }
+    // Wait for a child to exit.
+    sleep(p, &wait_lock);  //DOC: wait-sleep
   }
-  return -1;
-
-  found:
-    p->pid = allocpid();
-    p->state = USED;
-
-    // Set up new context to start executing at forkret,
-    // which returns to user space.
-    memset(&np->context, 0, sizeof(np->context));
-    p->context.ra = (uint64)forkret;
-    p->context.sp = p->kstack + PGSIZE;
-    */
-  return 0;
- 
-}
-
-int join(void ** stack){
-
-  return 0;
 }

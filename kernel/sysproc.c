@@ -97,7 +97,7 @@ sys_clone(void){
   argaddr(1, &arg1);
   argaddr(2, &arg2);
   argaddr(3, &stack);
-
+  
   return clone((void*)fcn, (void*)arg1, (void*)arg2, (void*)stack);
   
   return 0;
@@ -106,6 +106,7 @@ sys_clone(void){
 uint64
 sys_join(void){
   uint64 stack;
-  argaddr(0, &stack);
-  return join((void**)stack);
+  argaddr(0, &stack);  
+  join(stack);
+  return 0;
 }

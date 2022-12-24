@@ -151,7 +151,6 @@ int thread_create(void (*fn)(void *, void *), void* arg1, void* arg2)
 {
   void* stack;
   stack = malloc(PGSIZE);
-
   return clone(fn, arg1, arg2, stack);
 }
 
@@ -159,6 +158,7 @@ int thread_join()
 {
   void * stackPtr;
   int x = join(&stackPtr);
+  free(stackPtr);
   return x;
 }
 

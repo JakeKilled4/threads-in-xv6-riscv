@@ -437,3 +437,61 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
     return -1;
   }
 }
+
+void syncronize_pagetable_threads(pagetable_t s_pagetable, pagetable_t d_pagetable){
+  // Nothing to do 
+  if(s_pagetable == 0) return;
+
+  uint64 va = TRAPFRAME;
+
+  // Source
+  pte_t *s_pte2 = &s_pagetable[PX(2, va)];
+  pagetable_t s_pagetable1 = (pagetable_t)PTE2PA(*s_pte2); // pagetable level-1
+
+  pte_t *s_pte1 = &s_pagetable1[PX(1, va)];
+  pagetable_t s_pagetable0 = (pagetable_t)PTE2PA(*s_pte1); // pagetable level-0
+  
+  // pte_t *s_pte0 = &s_pagetable0[PX(0, va)];
+
+  // Destiny
+  pte_t *d_pte2 = &d_pagetable[PX(2, va)];
+  pagetable_t d_pagetable1 = (pagetable_t)PTE2PA(*d_pte2); // pagetable level-1
+
+  pte_t *d_pte1 = &d_pagetable1[PX(1, va)];
+  pagetable_t d_pagetable0 = (pagetable_t)PTE2PA(*d_pte1); // pagetable level-0
+
+  pte_t *d_pte0 = &d_pagetable0[PX(0, va)];
+
+  
+  // Copy the pages
+  uint64 addr0 = *d_pte0;
+  memmove(d_pagetable0, s_pagetable0, PGSIZE);  // Copy the level-0
+  d_pagetable0[PX(0, va)] = addr0;
+
+  uint64 addr1 = *d_pte1;
+  memmove(d_pagetable1, s_pagetable1, PGSIZE);  // Copy the level-1
+  d_pagetable1[PX(1, va)] = addr1;
+
+  uint64 addr2 = *d_pte2;
+  memmove(d_pagetable, s_pagetable, PGSIZE);    // Copy the level-2 
+  d_pagetable[PX(2, va)] = addr2;
+}
+
+void free_thread_pages(pagetable_t pagetable){
+
+  uint64 va = TRAPFRAME;
+
+  pte_t *pte2 = &pagetable[PX(2, va)];
+  pagetable_t pagetable1 = (pagetable_t)PTE2PA(*pte2); // pagetable level-1
+
+  pte_t *pte1 = &pagetable1[PX(1, va)];
+  pagetable_t pagetable0 = (pagetable_t)PTE2PA(*pte1); // pagetable level-0
+  
+  kfree(pagetable0);
+  kfree(pagetable1);
+  kfree(pagetable);
+
+
+  
+
+}
