@@ -438,6 +438,8 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
   }
 }
 
+
+// Copy the 3 pages to make equal the pagetable except the trapframe
 void syncronize_pagetable_threads(pagetable_t s_pagetable, pagetable_t d_pagetable){
   // Nothing to do 
   if(s_pagetable == 0) return;
@@ -451,8 +453,6 @@ void syncronize_pagetable_threads(pagetable_t s_pagetable, pagetable_t d_pagetab
   pte_t *s_pte1 = &s_pagetable1[PX(1, va)];
   pagetable_t s_pagetable0 = (pagetable_t)PTE2PA(*s_pte1); // pagetable level-0
   
-  // pte_t *s_pte0 = &s_pagetable0[PX(0, va)];
-
   // Destiny
   pte_t *d_pte2 = &d_pagetable[PX(2, va)];
   pagetable_t d_pagetable1 = (pagetable_t)PTE2PA(*d_pte2); // pagetable level-1
@@ -477,6 +477,7 @@ void syncronize_pagetable_threads(pagetable_t s_pagetable, pagetable_t d_pagetab
   d_pagetable[PX(2, va)] = addr2;
 }
 
+// Free the 3 pages (of the pagetable) of the thread
 void free_thread_pages(pagetable_t pagetable){
 
   uint64 va = TRAPFRAME;
